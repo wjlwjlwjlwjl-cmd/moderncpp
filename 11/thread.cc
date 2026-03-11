@@ -1,46 +1,24 @@
+#include <future>
 #include <iostream>
-#include <mutex>
 #include <thread>
 
-std::mutex foo, bar;
-int i = 0;
-std::once_flag flag;
-void set_winner(const std::string &s) {
-    std::cout << "winner is " << s << std::endl;
+int task(const std::string &name) {
+    std::cout << name << " start" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << std::this_thread::get_id() << " " << name << std::endl;
+    return 1;
 }
-
-void task1() {
-    std::unique_lock<std::mutex> lk(foo, std::try_to_lock);
-    std::unique_lock<std::mutex> lk2(bar, std::try_to_lock);
-    if (lk) {
-        std::cout << "task1 get the lock" << std::endl;
-    }
-}
-
-void task2() {
-    int ret = std::try_lock(foo, bar);
-    if (ret == -1) {
-        std::cout << "get all lock" << std::endl;
-    }
-    if (ret == 1) {
-        std::cout << "haven't get bar" << std::endl;
-    }
-    if (ret == 0) {
-        std::cout << "haven't get foo" << std::endl;
-    }
-}
-
-void race(const std::string &name) { std::call_once(flag, set_winner, name); }
 
 int main() {
-    std::thread t1(task1);
-    std::thread t2(task2);
-    std::thread t3(race, "t3");
-    std::thread t4(race, "t4");
+    auto fut1 = std::async(std::launch::async, task, "async task");
+    auto fut2 = std::async(std::launch::deferred, task, "deffered task");
+    std::cout << "waiting result" << std::endl;
 
-    t1.join();
-    t2.join();
-    t3.join();
-    t4.join();
+    auto ret = fut1.wait_for(std::chrono::seconds(1));
+    if (ret == std::future_status::timeout) {
+        std::cout << "task async timeout" << std::endl;
+    }
+    auto res = fut2.get();
+    std::cout << std::boolalpha << fut2.valid() << std ::endl;
     return 0;
 }
