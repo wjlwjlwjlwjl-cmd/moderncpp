@@ -243,3 +243,112 @@ int main() {
     return 0;
 }
 ```
+# promise
+1. `promise`允许一个线程在运行没有结束以前，就通过`promise`与其他线程之间进行数据、异常的传递，这些方法包括`set_value()` `set_exception`等，其他线程可以通过`get_future`去等待，没有`set_value`时阻塞等待，否则会通过`future`的方式传递数据
+2. 例如，通过promise和future的配合，就可以实现一种生产者-消费者的关系
+```cpp
+void consumer(std::promise<std::string> &prom) {
+    try {
+        auto fut1 = prom.get_future();
+        auto ret = fut1.get();
+        std::cout << "get data: " << ret << std::endl;
+    } catch (const std::exception &e) {
+        std::cout << "error occured: " << e.what() << std::endl;
+    }
+}
+void producer(std::promise<std::string> &prom, const std::string &data) {
+    try {
+        if (data.empty()) {
+            throw std::logic_error("data is empty");
+        }
+        std::cout << "produce data: data" << std::endl;
+        prom.set_value(data);
+    } catch (...) {
+        prom.set_exception(std::current_exception());
+    }
+}
+int main() {
+    std::promise<std::string> prom;
+    std::thread t1(producer, std::ref(prom), "data1");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::thread t2(consumer, std::ref(prom));
+    t1.join();
+    t2.join();
+    return 0;
+}
+```
+# shared_future
+1. 不同于`future`，可以拷贝，可以被多个线程使用，获取数据、异常，通过`future`的`shared`方式创建
+```cpp
+void task(std::shared_future<int> sf) {
+    std::cout << std::this_thread::get_id() << " get data: " << sf.get()
+              << std::endl;
+}
+
+int main() {
+    std::promise<int> prom;
+    std::shared_future<int> sf = prom.get_future().share();
+    std::vector<std::thread> threads(4);
+    for (int i = 0; i < 4; i++) {
+        threads[i] = std::thread(task, sf);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    prom.set_value(100);
+    for (int i = 0; i < 4; i++) {
+        threads[i].join();
+    }
+    return 0;
+}
+```
+# packaged_task
+1. 对所有可调用对象的封装，允许在线程之间传递任务，不允许拷贝但是可以移动构造
+2. 可以通过`get_future`获取一个`future`对象，在`packaged_task`包装的对象完成调用之后，可以通过`get`来获取结果（没完成则阻塞）
+```cpp
+void runner(std::queue<std::packaged_task<int()>> &taskq, std::mutex &mtx,
+            std::condition_variable &cv) {
+    while (1) {
+        std::packaged_task<int()> task;
+        {
+            std::unique_lock<std::mutex> ul(mtx);
+            cv.wait(ul, [&taskq](){ return !taskq.empty();});
+            task = std::move(taskq.front()); //这里就是因为packaged_task可以移动但是不可以拷贝
+            taskq.pop();
+        }
+        if (!task.valid()) {
+            break;
+        }
+        task();
+        {
+            std::lock_guard lg(mtx);
+            std::cout << std::this_thread::get_id() << " doing the work..." <<  std::endl;
+        }
+    }
+}
+
+int main() {
+    std::queue<std::packaged_task<int()>> taskq;
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::thread rth(runner, std::ref(taskq), std::ref(mtx), std::ref(cv));
+    for (int i = 0; i < 5; i++) {
+        std::packaged_task<int()> task([i]() {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            return i * i;
+        });
+        auto fut = task.get_future();
+        {
+            std::lock_guard lk(mtx);
+            taskq.push(std::move(task)); //push有两种方式，一种是传左值引用，走拷贝构造；另一种是穿右值。这里如果使用ref的话，编译报错
+        }
+        cv.notify_one();
+        std::cout << "task " << i << " get result: " << fut.get() << std::endl;
+        if (i == 4) {
+            std::lock_guard lk(mtx);
+            taskq.emplace();
+            cv.notify_one();
+        }
+    }
+    rth.join();
+    return 0;
+}
+```
