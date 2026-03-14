@@ -352,3 +352,69 @@ int main() {
     return 0;
 }
 ```
+# 综合实例
+1. 线程池，通过对C++11 并发支持库中各种对象的使用，制作的线程库
+2. 能够往任务队列中添加多种参数、返回值类型的任务，线程之间通过future进行数据的通信
+```cpp
+class ThreadPool {
+public:
+    ThreadPool(size_t tnum) : stop(false) {
+        for (int i = 0; i < tnum; i++) {
+            workers.emplace_back([=]() {
+                while (1) {
+                    std::function<void()> task;
+                    {
+                        std::unique_lock<std::mutex> ul(mtx);
+                        cv.wait(ul, [=]() { return stop || !tasks.empty(); });
+                        if (stop && tasks.empty()) {
+                            std::cout << std::this_thread::get_id()
+                                      << " exit..." << std::endl;
+                            return;
+                        }
+                        task = std::move(tasks.front());
+                        tasks.pop();
+                    }
+                    task();
+                }
+            });
+        }
+    }
+
+    template <class F, class... Arg>
+    auto enqueue(F &&f, Arg &&...args)
+        -> std::future<typename std::result_of<F(Arg...)>::type> {
+        using return_type = typename std::result_of<F(Arg...)>::type;
+        auto task = std::make_shared<std::packaged_task<return_type()>>(
+            std::bind(std::forward<F>(f), std::forward<Arg>(args)...));
+
+        std::future<return_type> res = task->get_future();
+        {
+            std::lock_guard lg(mtx);
+            tasks.push([task]() { (*task)(); });
+        }
+        cv.notify_one();
+        return res;
+    }
+
+    ~ThreadPool() {
+        {
+            std::lock_guard lg(mtx);
+            stop = true;
+        }
+        cv.notify_all();
+        for (auto &th : workers) {
+            th.join();
+        }
+    }
+
+private:
+    std::condition_variable cv;
+    std::mutex mtx;
+
+    // 这里使用包装器的原因是为了允许一个线程池的任务队列中有多种参数的任务，packaged_list直接使用会导致任务参数固定
+    std::queue<std::function<void()>> tasks;
+
+    std::vector<std::thread> workers;
+    bool stop;
+};
+```
