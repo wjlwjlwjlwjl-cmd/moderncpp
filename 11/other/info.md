@@ -314,3 +314,69 @@ struct remove_const<const T> {
 
 
 
+### 类型萃取
+
+1. 其实上面的例子中已经是简单的类型萃取了，不过在STL中也给出了实现
+2. C++17后，为了简化书写，用`_v` `_t`来代替`::value` `::type`
+3. 进行基础类型判断
+
+```cpp
+	std::cout << std::is_void<void>::value << std::endl;
+    std::cout << std::is_integral<int>::value << std::endl;
+    std::cout << std::is_floating_point<float>::value << std::endl;
+    std::cout << std::is_pointer<int*>::value << std::endl;
+    std::cout << std::is_reference<int&>::value << std::endl;
+    std::cout << std::is_const<const int>::value << std::endl;
+```
+
+
+
+4. 进行复合类型检查
+
+```cpp
+    std::cout << std::is_function_v<void()> << std::endl; //is function?
+    std::cout << std::is_member_object_pointer_v<int (Foo::*)> << std::endl; //is object's member pointer
+    std::cout << std::is_compound_v<std::string> << std::endl; //is fundamental type
+```
+
+5. 进行关系检查
+
+```cpp
+	std::cout << std::is_same<int, int32_t>::value << std::endl;
+    std::cout << std::is_base_of_v<Base, Derive> << std::endl;
+    std::cout << std::is_convertible<char*, std::string>::value << std::endl; //前者能够转化为后者
+```
+
+6. 类型修改
+
+```cpp
+	int n = 10;
+    const int cn = 10;
+    std::add_const<int>::type a = 1;
+    std::add_pointer_t<int> pa = &n;
+    std::add_lvalue_reference<int>::type rn = n;
+    std::remove_const<decltype(cn)>::type b = 10;
+    std::remove_pointer_t<int*> c = 10;
+    std::remove_reference<int&>::type d = 10;
+```
+
+7. 条件类型选择
+
+```cpp
+    std::cout << std::is_same_v<int, std::conditional_t<true, int, float>> << std::endl;
+    std::cout << std::is_same_v<float, std::conditional_t<false, int, float>> << std::endl;
+```
+
+
+
+8. 模板类型推导
+
+```cpp
+template <class F, class...Arg>
+using invoke_result_t = std::invoke_result_t<F, Arg...>()
+```
+
+
+
+
+
