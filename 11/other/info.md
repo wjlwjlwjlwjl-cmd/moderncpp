@@ -376,7 +376,51 @@ template <class F, class...Arg>
 using invoke_result_t = std::invoke_result_t<F, Arg...>()
 ```
 
+### SFINAE
+
+1. SFINAE并不是单词，而是substitute failure is not an error，当模板匹配失败的时候，并不会直接编译报错，而是寻找是否有其他合适的模板，如果找到最后也没有那么就编译报错
+2. 应用一：函数重载
+
+```cpp
+template <class T>
+auto func(T x) -> decltype(x++, void()) {
+	std::cout << "x is implementable" << std::endl;
+}
+template <class T>
+auto func(T x) -> std::void_t<decltype(x.size())> {
+	std::cout << "x has member fucntion size" << std::endl;
+}
+void func(...){
+    std::cout << "fallback func" << std::endl;
+}
+```
+
+在上面的decltype中，会首先尝试执行第一个条件（例如x是否可以++，x是否具有成员函数size() )，当条件成功时，decltype会继续往后执行逗号表达式并返回类型对象（比如void对象），当条件失败时，会继续寻找其他模板，都没有就会调用func(...)
 
 
 
+3. 应用二：enable_if，在编译时启用或者禁用函数模板
 
+```cpp
+template <class T>  //对int类型启用
+typename std::enable_if_t<std::is_integral<T>, int> Foo(T t){
+    return t + 1;
+}
+template <class T>  //对浮点数类型启用
+typename std::enable_if_t<std::is_floating_point<T>, float> Foo(T t){
+    return t / 2;
+}
+```
+
+enable_if会在第一个模板返回true时，给出第二个参数的类型，不过有一个void类型的缺省值，不写的话在上面的例子中就是返回void
+
+4. 应用三：模板类型检查
+
+```cpp
+template <class K, class V = std::enable_if_t<std::is_integral<K>>>
+void func(K k){
+    std::cout << ++k << std::endl;
+}
+```
+
+如果enable_if判断条件失败不返回类型的话，V就会推导失败，因为V的作用就是进行类型检查，所以不写名称也可以
