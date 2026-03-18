@@ -219,3 +219,98 @@ int a = 10; const int& ra = a;
 decltype(auto) b = ra; //b的类型是const int&
 ```
 
+### using typedef
+
+```cpp
+typedef void(*)(int, int) func;
+using func1 = void(*)(int, int);
+
+template<class T>
+using unordered_map<string, T> con;
+```
+
+1. typedef和using都用来重定义类型，但是两者有用法和功能上的区别。
+2. typedef采取先是原类型再是重定义类型的顺序（或者嵌套，比如函数指针的定义）；using采取先是重定义类型再是原类型的方式
+3. using可以完成带模板参数的类型重定义
+
+### 强类型枚举
+
+```cpp
+enum Color {RED, BLUE, YELLOW}; //不能指定底层类型
+enum class Gender :uint8_t {MALE, FEMALE};
+int main(){
+    int col2 = RED; //污染作用域、自动隐式类型转换
+    Gender male = Gender::MALE;
+}
+```
+
+1. 强枚举类型是对普通enum的优化，写为enum class或者enum struct
+2. 强枚举类型可以保证只能通过指定类域的方式访问，能够避免隐式类型转换为int，也能够通过 :type的方式指定底层类型
+
+### static_assert
+
+```cpp
+static_assert(sizeof(void*) == 8, "the platform should be 64-bit");
+static_assert(sizeof(int) == 4, "the int type should has 4 bytes")
+```
+
+1. static_assert是用来做编译时断言，如果不通过则编译报错，与之相对的是assert，它是在运行时报错并终止运行
+2. static判断的式子必须是常量表达式，即在编译期间可以确定结果
+
+### tuple
+
+1. 可以理解为支持任意多个类型的pair，C++17之后还支持了自动类型识别，不需要显式指定类型
+
+```cpp
+tuple<int, double, string> t1 = {1, 1.1, "1.11"};
+auto t2 = make_tuple(2, 2.2, "2.22");
+```
+
+2. 根据下标获取tuple元素
+
+```cpp
+int a = get<0>(t1);
+double b = get<1>(t2);
+string str = get<2>(t1);
+```
+
+
+
+3. tuple的解包可以通过tie，但是C++17之后可以使用结构化绑定，更加方便
+
+```cpp
+std::tuple t1(1, 1.1, "1.11");
+int a; double b; string str;
+std::tie(a, b, str) = t1;
+
+auto [val1, val2, val3] = t1;
+```
+
+### 模板元编程
+
+1. 利用模板的递归实例化等等语法规则，在编译器就完成一部分结果的运行获取，常用类型变量或者静态成员变量来完成
+
+```cpp
+//判断两个类型是否相同
+template <class T, class U>
+struct is_same {
+    constexpr static const bool value = false;
+};
+template <class T>
+struct is_same<T, T> {
+    constexpr static const bool value = true;
+};
+
+//去掉const
+template <class T>
+struct remove_const {
+    using type = T;
+};
+template <class T>
+struct remove_const<const T> {
+    using type = T;
+};
+```
+
+
+
