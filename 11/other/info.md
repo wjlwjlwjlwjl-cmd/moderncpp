@@ -1,52 +1,52 @@
-## constecpr和常量表达式
+### constecpr和常量表达式
 
-### 1. 底层const和顶层const
+#### 1. 底层const和顶层const
 
-1. 对于大部分对象，被const修饰都是顶层const；
-2. 对于指针来说，本身被const修饰（*在const左边）叫做顶层const；指向对象被const修饰（*在const右边）叫做底层const
-3. 对于引用，被const修饰的是顶层const
+1. 对于大部分对象，被const修饰都是`顶层const`；
+2. 对于指针来说，本身被const修饰（*在const左边）叫做`顶层const`；指向对象被const修饰（*在const右边）叫做`底层const`
+3. 对于引用，被const修饰的是`顶层const`
 
-### 2. constexpr
+#### 2. constexpr
 
 1. 常量表达式是指值不会改变而且编译期就能确定结果的变量，使用字面量、const表达式初始化的const变量都是常量表达式，使用变量初始化的const变量不是
-2. constexpr用来修饰的变量必须是常量表达式，同时也必须使用常量表达式初始化，如果不是的话编译期报错，constexpr也会让编译器对所修饰常量表达式进行优化，提升运行时效率。比如将const变量放到寄存器当中，取得时候直接从寄存器而不从内存当中去取
-3. constexpr也可以修饰指针，const修饰的指针是指针本身，即顶层const
+2. `constexpr`用来修饰的变量必须是常量表达式，同时也必须使用常量表达式初始化，如果不是的话编译期报错，`constexpr`也会让编译器对所修饰常量表达式进行优化，提升运行时效率。比如将const变量放到寄存器当中，取得时候直接从寄存器而不从内存当中去取
+3. `constexpr`也可以修饰指针，const修饰的指针是指针本身，即`顶层const`
 ```cpp
 constexpr const int a = 0;
 constexpr const char *pstr = "hello world";
 ```
-## constexpr函数
+### constexpr函数
 
-### constexpr在C++11 -> C++14 -> C++20的演进过程
+#### constexpr在C++11 -> C++14 -> C++20的演进过程
 
-#### C++11
+##### C++11
 
 返回值类型单一，内部只支持一句return语句，想要执行多个步骤只能递归
 
-#### C++14
+##### C++14
 
 1. 函数体内可以有多个语句，支持控制流（循环、判断等）语句
-2. 支持返回值为自定义类型（constexpr自定义类型）以及STL容器如array（对于'[]'的支持到C++17）
+2. 支持返回值为自定义类型（`constexpr`自定义类型）以及STL容器如`array`（对于`[]`的支持到C++17）
 3. 支持定义局部变量
 
-#### C++17
+##### C++17
 
-1. 支持if constexpr分支语句，对于符合条件的编译器运算，其他的丢弃
-2. 支持作用在lambda表达式，要求同对函数的要求，捕获的值也必须是字面量，constexpr位置在参数列表后返回类型定义前
+1. 支持`if constexpr`分支语句，对于符合条件的编译器运算，其他的丢弃
+2. 支持作用在`lambda表达式`，要求同对函数的要求，捕获的值也必须是字面量，`constexpr`位置在参数列表后返回类型定义前
 
-#### C++20
+##### C++20
 
-1. 支持new delete，但是必须在constexpr函数体中完成资源的释放（包括使用STL容器，内部有动态资源的话）
-2. 开始支持STL容器如vector，以及一些接口如find sort
-3. 支持try-catch语句，但是并不是普通的运行时抛异常，而是异常出现时直接编译不通过
-4. 支持constexpr联合体，外界可以访问其活跃变量
-5. 支持mutable修饰constexpr类的成员变量以实现在其constexpr成员函数中进行修改该成员变量
-6. 支持constexpr虚函数
+1. 支持`new delete`，但是必须在`constexpr函数体`中完成资源的释放（包括使用STL容器，内部有动态资源的话）
+2. 开始支持STL容器如`vector`，以及一些接口如`find` `sort`
+3. 支持`try-catch`语句，但是并不是普通的运行时抛异常，而是异常出现时直接编译不通过
+4. 支持`constexpr联合体`，外界可以访问其活跃变量
+5. 支持`mutable`修饰constexpr类的成员变量以实现在其constexpr成员函数中进行修改该成员变量
+6. 支持`constexpr虚函数`
 
-### constexpr普通函数
+#### constexpr普通函数
 
-1. constexpr也可以修饰函数，通过这种方式修饰的函数参数、返回值都只能是字面量，调用的时候也必须使用字面量或者常量表达式传参。
-2. constexpr修饰的函数如果符合要求调用的话，那么就不会在运行时得到结果，比inline内联函数在运行时省去的工作更多，直接在编译时去完成函数结果的运算，虽然会导致编译时间变长；如果不符合调用要求的话就当作普通函数调用
+1. `constexpr`也可以修饰函数，通过这种方式修饰的函数参数、返回值都只能是字面量，调用的时候也必须使用字面量或者常量表达式传参。
+2. `constexpr`修饰的函数如果符合要求调用的话，那么就不会在运行时得到结果，比`inline`内联函数在运行时省去的工作更多，直接在编译时去完成函数结果的运算，虽然会导致编译时间变长；如果不符合调用要求的话就当作普通函数调用
 ```cpp
 constexpr int fib(int a){
     return a == 1 ? 1 : a + fib(a - 1);
@@ -54,21 +54,21 @@ constexpr int fib(int a){
 constexpr int ret = fib(100);
 int n = 100; int ret = fib(n);
 ```
-### constexpr构造函数
+#### constexpr构造函数
 
-1. constexpr不能修饰自定义类型，除非该类型的构造函数被constexpr修饰，同时该自定义类型有以下要求
+1. `constexpr`不能修饰自定义类型，除非该类型的构造函数被`constexpr`修饰，同时该自定义类型有以下要求
 * 所有成员变量都是字面量，并且都在初始化列表中初始化
 * 构造函数参数都是字面量
 2. 如果没有按照要求传参，那么就是在运行期进行的普通构造
 
-### constexpr成员函数
+#### constexpr成员函数
 
-1. 当constexpr修饰的成员函数所在的自定义类型的构造函数是被constexpt修饰时，并且通过constexpr修饰的自定义类型调用，就可以同样在编译器就完成对自定义类型的构建和其constexpr成员函数的执行，其实使用和constexpr修饰的普通函数类似
+1. 当`constexpr`修饰的成员函数所在的自定义类型的构造函数是被`constexpt`修饰时，并且通过`constexpr`修饰的自定义类型调用，就可以同样在编译器就完成对自定义类型的构建和其`constexpr`成员函数的执行，其实使用和`constexpr`修饰的普通函数类似
 2. 没有符合要求同样是按照普通成员函数执行
 
-### constexpr模板函数
+#### constexpr模板函数
 
-1. 其实就是constexpr普通函数加上了模板这一层，一起在编译期完成工作
+1. 其实就是`constexpr`普通函数加上了模板这一层，一起在编译期完成工作
 ```cpp
 class Date
 {
@@ -97,7 +97,7 @@ int main(){
 
 ### consteval
 
-* constexpr修饰的函数，既可能在编译时求值，也可能在运行时求值，consteval修饰的函数要求必须在编译时求值，即满足constexpr修饰函数时须满足的条件，否则编译报错
+* `constexpr`修饰的函数，既可能在编译时求值，也可能在运行时求值，`consteval`修饰的函数要求必须在编译时求值，即满足`constexpr`修饰函数时须满足的条件，否则编译报错
 
 ```cpp
 consteval int func(int a, int b){
@@ -108,8 +108,8 @@ constexpr int a = func(1, 2);
 
 ### constinit
 
-* constinit作用于变量，要求必须在编译时初始化，但是在初始化后并不作为常量，而是可以在运行时被修改
-* constinit可以作用于静态存储区和线程存储期的变量，例如全局变量、static变量、thread_local变量（在各个线程内都存在一份的变量），不能作用于自动存储期的变量，例如函数的局部变量（主函数中的非全局、非静态变量也算）
+* `constinit`作用于变量，要求必须在编译时初始化，但是在初始化后并不作为常量，而是可以在运行时被修改
+* `constinit`可以作用于静态存储区和线程存储期的变量，例如全局变量、`static`变量、`thread_local`变量（在各个线程内都存在一份的变量），不能作用于自动存储期的变量，例如函数的局部变量（主函数中的非全局、非静态变量也算）
 
 ```cpp
 constexpr int func(int a, int b) {return a + b;}
@@ -118,7 +118,7 @@ constinit int a = func(1, 2); constinit int b = func2(1, 2);
 int main() {constinit static int c = 1; return 0;}
 ```
 
-* constinit还可以作用在类上，保证其在编译时初始化
+* `constinit`还可以作用在类上，保证其在编译时初始化
 
 ```cpp
 class A{public: constexpr A(int a) :a(a){} private: int a};
@@ -126,7 +126,7 @@ constinit A a(1);
 int main() {...}
 ```
 
-* constinit还可以解决多个cpp文件中全局变量、静态变量初始化顺序的问题，例如以下代码
+* `constinit`还可以解决多个cpp文件中全局变量、静态变量初始化顺序的问题，例如以下代码
 
 ```cpp
 //a.cpp
@@ -137,7 +137,7 @@ extern int a;
 int b = a;
 ```
 
-这种方法就可能出现b在a之前初始化的问题，所以使用constinit就能使两者一定在编译器都完成初始化
+这种方法就可能出现b在a之前初始化的问题，所以使用`constinit`就能使两者一定在编译器都完成初始化
 
 ```cpp
 constinit int a = 10;
@@ -147,9 +147,9 @@ constinit int b = a;
 
 ### auto
 
-* auto用来自动推到类型，但是他有以下四点值得注意
+* `auto`用来自动推到类型，但是他有以下四点值得注意
 
-1. auto不能推导出引用，想要使用引用必须显式指定。因为直接把引用对象交给auto的话，那么auto最后拿到的实际还是被引用的对象，那么就不会初始化出引用类型
+1. `auto`不能推导出引用，想要使用引用必须显式指定。因为直接把引用对象交给`auto`的话，那么`auto`最后拿到的实际还是被引用的对象，那么就不会初始化出引用类型
 
 ```cpp
 int a = 1; int& ra = a;
@@ -165,7 +165,7 @@ const int* pa = &a;
 auto c = pa; // c的类型是const int*
 ```
 
-3. 使用auto& 去显式推导引用类型时，顶层const会被保留
+3. 使用`auto& `去显式推导引用类型时，顶层const会被保留
 
 ```cpp
 const int a = 10; 
@@ -174,7 +174,7 @@ const int* const pa = &a;
 auto& c = pa; // const int* const
 ```
 
-4. auto&&为万能引用，传左值为左值引用，传右值为右值引用，const属性保留
+4. `auto&&`为万能引用，传左值为左值引用，传右值为右值引用，const属性保留
 
 ```cpp
 int a = 10; const int c = a;
@@ -187,8 +187,8 @@ auto&& r4 = std::move(c); //const int&&
 ### 尾置返回类型和decltype
 
 1. 尾置返回类型是在参数列表之后，通过箭头指定返回类型表达式，与auto配合使用，在C++11主要是为了解决auto不能直接作为返回类型的问题，不过之后的标准放开了这个限制，所以尾插表达式也就没那么重要了
-2. decltype是可以返回变量表达式的类型，而且不像auto一样会对类型做处理，而是给什么类型最后的结果就是什么类型；也可以通过函数调用表达式的方式去使用函数调用返回值的类型，但是这个过程中并不会真正去调用函数
-3. decltype对与引用有两种特殊的处理
+2. `decltype`是可以返回变量表达式的类型，而且不像auto一样会对类型做处理，而是给什么类型最后的结果就是什么类型；也可以通过函数调用表达式的方式去使用函数调用返回值的类型，但是这个过程中并不会真正去调用函数
+3. `decltype`对与引用有两种特殊的处理
 
 ```cpp
 int a = 10; int* pa = &a;
@@ -196,7 +196,7 @@ decltype((a)) b = a;
 decltype(*pa) c = a;
 ```
 
-b和c的类型都是int&
+b和c的类型都是`int&`
 
 4. auto 必须通过初始化值来完成类型推导，这一点对于成员变量是很不方便的，但是decltype就解决了这个问题
 
@@ -212,7 +212,7 @@ private:
 };
 ```
 
-5. C++14中，结合auto自动类型推导和decltype精准的类型判断，可以使用decltype(auto)的方式自动精确推导
+5. C++14中，结合auto自动类型推导和decltype精准的类型判断，可以使用`decltype(auto)`的方式自动精确推导
 
 ```cpp
 int a = 10; const int& ra = a;
@@ -229,9 +229,9 @@ template<class T>
 using unordered_map<string, T> con;
 ```
 
-1. typedef和using都用来重定义类型，但是两者有用法和功能上的区别。
-2. typedef采取先是原类型再是重定义类型的顺序（或者嵌套，比如函数指针的定义）；using采取先是重定义类型再是原类型的方式
-3. using可以完成带模板参数的类型重定义
+1. `typedef`和`using`都用来重定义类型，但是两者有用法和功能上的区别。
+2. `typedef`采取先是原类型再是重定义类型的顺序（或者嵌套，比如函数指针的定义）；`using`采取先是重定义类型再是原类型的方式
+3. `using`可以完成带模板参数的类型重定义
 
 ### 强类型枚举
 
@@ -244,8 +244,8 @@ int main(){
 }
 ```
 
-1. 强枚举类型是对普通enum的优化，写为enum class或者enum struct
-2. 强枚举类型可以保证只能通过指定类域的方式访问，能够避免隐式类型转换为int，也能够通过 :type的方式指定底层类型
+1. 强枚举类型是对普通enum的优化，写为`enum class`或者`enum struct`
+2. 强枚举类型可以保证只能通过指定类域的方式访问，能够避免隐式类型转换为int，也能够通过` :type`的方式指定底层类型
 
 ### static_assert
 
@@ -254,8 +254,8 @@ static_assert(sizeof(void*) == 8, "the platform should be 64-bit");
 static_assert(sizeof(int) == 4, "the int type should has 4 bytes")
 ```
 
-1. static_assert是用来做编译时断言，如果不通过则编译报错，与之相对的是assert，它是在运行时报错并终止运行
-2. static判断的式子必须是常量表达式，即在编译期间可以确定结果
+1. `static_assert`是用来做编译时断言，如果不通过则编译报错，与之相对的是assert，它是在运行时报错并终止运行
+2. `static_assert`判断的式子必须是常量表达式，即在编译期间可以确定结果
 
 ### tuple
 
@@ -276,7 +276,7 @@ string str = get<2>(t1);
 
 
 
-3. tuple的解包可以通过tie，但是C++17之后可以使用结构化绑定，更加方便
+3. `tuple`的解包可以通过`tie`，但是C++17之后可以使用结构化绑定，更加方便
 
 ```cpp
 std::tuple t1(1, 1.1, "1.11");
@@ -311,8 +311,6 @@ struct remove_const<const T> {
     using type = T;
 };
 ```
-
-
 
 ### 类型萃取
 
@@ -378,7 +376,7 @@ using invoke_result_t = std::invoke_result_t<F, Arg...>()
 
 ### SFINAE
 
-1. SFINAE并不是单词，而是substitute failure is not an error，当模板匹配失败的时候，并不会直接编译报错，而是寻找是否有其他合适的模板，如果找到最后也没有那么就编译报错
+1. SFINAE并不是单词，而是`substitute failure is not an error`，当模板匹配失败的时候，并不会直接编译报错，而是寻找是否有其他合适的模板，如果找到最后也没有那么就编译报错
 2. 应用一：函数重载
 
 ```cpp
@@ -399,7 +397,7 @@ void func(...){
 
 
 
-3. 应用二：enable_if，在编译时启用或者禁用函数模板
+3. 应用二：`enable_if`，在编译时启用或者禁用函数模板
 
 ```cpp
 template <class T>  //对int类型启用
@@ -412,7 +410,7 @@ typename std::enable_if_t<std::is_floating_point<T>, float> Foo(T t){
 }
 ```
 
-enable_if会在第一个模板返回true时，给出第二个参数的类型，不过有一个void类型的缺省值，不写的话在上面的例子中就是返回void
+`enable_if`会在第一个模板返回true时，给出第二个参数的类型，不过有一个void类型的缺省值，不写的话在上面的例子中就是返回void
 
 4. 应用三：模板类型检查
 
@@ -423,4 +421,19 @@ void func(K k){
 }
 ```
 
-如果enable_if判断条件失败不返回类型的话，V就会推导失败，因为V的作用就是进行类型检查，所以不写名称也可以
+如果`enable_if`判断条件失败不返回类型的话，V就会推导失败，因为V的作用就是进行类型检查，所以不写名称也可以
+
+### 模板元编程的优缺点
+
+#### 优点：
+
+1. 编译时运算，运行时零开销
+2. 类型安全，可以通过类型萃取和SFINAE等进行类型的控制
+3. 高度抽象，自由操作的空间大，可以构建各种库
+
+#### 缺点
+
+1. 编译时间长
+2. 代码难度大，可读性也相对较低
+3. 报错并不方便阅读
+4. 编译期运算不方便调试
