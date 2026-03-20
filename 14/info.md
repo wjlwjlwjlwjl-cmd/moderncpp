@@ -272,3 +272,54 @@ int main() {
 }
 ```
 
+### integer_sequence
+
+1. 用来生成一段整数序列，可以指定何种整形类型，主要有以下方法
+
+```cpp
+std::integer_sequence<unsigned, 1, 2, 3, 4>{}; //生成的是[1, 5)，整数类型是unsigned int
+std::make_integer_sequence<unsigned, 10>{}; //生成的是[0, 11)，整数类型是unsigned int
+std::index_sequence<>{1, 2, 3, 4}; //生成的是[0, 5)，以下类型都是size_t
+std::index_sequence_for<std::ios, int, float>{}; //生成的是[0, 4)
+std::make_index_sequence_for<10>{}; //生成的是[0, 11)
+```
+
+其实五个方法之间是有封装关系的，后三个`index`系列接口生成的整数序列都是`size_t`的
+
+2. integer_sequence在模板元编程和编译计算中有很大的用处
+
+```cpp
+//元组的解包
+template <class...Arg>
+void PrintTuple(std::tuple<Arg...>& t){
+    PrintTupleImpl(t, std::index_sequence_for<Arg...>{});
+}
+template <class Tuple, size_t...I>
+void PrintTupleImpl(Tuple& t, std::index_sequence<I...>){
+    ((std::cout << std::get<I>(t) << " "), ...);
+}
+```
+
+### quoted
+
+1. quoted在输出时，会自动往字符串两端加上`"`
+2. 输入时，`"`会自动变为`\"`，`\`会自动变为`\\`；输出时会反过来进行更改
+3. 其实quoted就是为了能够做到原始字符串是什么样的，就通过什么样的方式存到内存中，再把存进去之前的样子完全读出来，不会因为一些转义字符等（比如换行符），影响内容的存储，这在很多需要转义字符比如序列化、反序列化上有用处
+
+```cpp
+	std::string s("this is a text.");
+	std::cout << std::quoted(s) << std::endl;
+
+	std::istringstream iss("\"hello world\"");
+	iss >> std::quoted(s);
+	std::cout << s << std::endl;
+
+	std::cout << std::quoted(s, '#') << std::endl;
+
+	std::string str = "this\n is a text\t hello";
+	std::string Rstr = R"(this is "Rtext")";
+	std::cout << "processed: " << std::quoted(str) << std::endl;
+	std::cout << "processed: " << std::quoted(Rstr) << std::endl;
+
+```
+
