@@ -122,3 +122,153 @@ decltype(auto) call(F&& f, Arg&&...args) {
 }
 ```
 
+### 二进制字面量
+
+1. C++14之后，引入了二进制字面量，就是可以直接像十进制、十六进制等直接通过字面量而不是字符串等形式给出。以`0b`或者`0B`开头
+
+```cpp
+int a = 10; //十进制
+int b = 052; //八进制
+int c = 0x12; //十六进制
+int d = 0b1010; //二进制
+```
+
+#### 二进制字面量的应用
+
+1. 位标志
+
+```cpp
+const int FLAG_A = 0b001;
+const int FLAG_B = 0b010;
+const int FLAG_C = 0b100;
+```
+
+2. 位图
+
+```cpp
+std::bitset<10>(std::string("10101"));
+std::bitset<10>(0x12);
+std::bitset<10>(0b1001);
+```
+
+m没有二进制字面量以前，只能通过其他进制数字的转换以及通过字符串给出的方式，两者都不方便，所以有二进制字面量之后就可以很方便的初始化位图
+
+
+
+### 数字分隔符
+
+1. 为了提升代码可读性，允许在表示数字时在任意位置加上`'`来表示分割意义，不影响数字的值
+
+```cpp
+int BIG_NUM = 123'456'789;
+double pi = 3.141'592'653;
+int HEX_VAL = 0x123'456'789;
+```
+
+### 使用默认非静态成员初始化器的聚合类
+
+1. What's 聚合类
+
+(1) 没有用户指定的构造函数（使用 `delete` `default`的不算）
+
+(2) 没有私有或者受保护的成员
+
+(3) 没有基类
+
+(4) 没有虚函数
+
+2. 默认成员初始化器：当构造聚合类时没有指定某些成员的值，就使用其声明时给定的初始值来完成初始化
+3. 初始化顺序：按照聚合类中声明的顺序分配聚合初始化的值
+
+```cpp
+struct Foo{
+    std::string s = "hello world";
+    int a = 10;
+    double b = 1.1;
+};
+Foo foo{"hello", 19}; //s = "hello", a = 19, b = 1.1
+Foo foo1; //s = "hello world",  a = 10, b = 1.1
+```
+
+4. C++20之后，进一步放宽了限制，可以通过指定具体成员的方式类特定初始化某个成员，其他的使用默认初始化器初始化，但是这里的构造函数即使是使用`delete` `default`修饰的也不行
+
+```cpp
+struct Foo{
+    int a = 10;
+    int b = 11;
+    int d=  13;
+}
+struct Bar{
+    Foo foo;
+    int c = 12;
+}
+Foo foo{.a = 0, .d = 0};
+Bar bar{.foo = {.a = 1, .b = 2}, .c = 3}; //允许嵌套类的定义
+```
+
+### exchange
+
+1. 方便的交换值。对于左值会调用拷贝赋值，右值会调用移动赋值
+
+```cpp
+	std::vector<int> v1{ 10, 20, 30 };
+	std::vector<int> v2 = std::exchange(v1, { 1, 2, 3 });
+	for (auto& e : v1) std::cout << e << " ";
+	std::cout << std::endl;
+	for (auto& e : v2) std::cout << e << " ";
+
+	for (int a{ 0 }, b{ 1 }; b <= 10; a = std::exchange(b, a + b)) {
+		std::cout << a << ", ";
+	}
+```
+
+ 	exchange的行为可以用以下代码模拟
+
+```cpp
+template <class T, class U>
+T exchange(T& obj, U&& new_val){
+    T old_val = std::move(obj);
+    new_val = std::forward<U>(new_val);
+    return old_val;
+}
+```
+
+
+
+2. 关于类型的问题
+
+```cpp
+template <class T, class U = T>
+T exchange(T& obj, U&& new_value){
+    //...
+}
+```
+
+`new_value`的类型给了一个`T`的类型作为缺省值，所以上面第一个数组的例子是可行的
+
+### make_unique
+
+1. 相比于直接`new`然后使用`unique_ptr`接管，`make_unique`更加安全，因为前者可能会出现在被`unique_ptr`接管之前构造异常导致资源未能释放，但是后者在内部会在构造抛异常时释放已经申请的资源
+2.  `make_unique`会对申请的空间进行初始化
+3. C++20之后引入了`make_unique_for_overwrite`，相比于`make_unique`，它不会对资源进行初始化，由用户完成对这些资源的初始化，相对来说节省了一定的性能
+
+```cpp
+template <class OutputInt>
+void fibnnaci(OutputInt start, OutputInt end) {
+	for (int a = 0, b = 1; start != end; start++) {
+		a = std::exchange(b, a + b);
+		*start = a;
+	}
+}
+
+int main() {
+	std::unique_ptr<int> up1 = std::make_unique<int>(1);
+	std::unique_ptr<int[]> up2 = std::make_unique<int[]>(2);
+    
+	std::unique_ptr<int[]> up3 = std::make_unique_for_overwrite<int[]>(10);
+	fibnnaci(up3.get(), up3.get() + 10);
+
+	return 0;
+}
+```
+
