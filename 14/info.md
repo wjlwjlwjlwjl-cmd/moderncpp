@@ -305,6 +305,7 @@ void PrintTupleImpl(Tuple& t, std::index_sequence<I...>){
 1. quoted在输出时，会自动往字符串两端加上`"`
 2. 输入时，`"`会自动变为`\"`，`\`会自动变为`\\`；输出时会反过来进行更改
 3. 其实quoted就是为了能够做到原始字符串是什么样的，就通过什么样的方式存到内存中，再把存进去之前的样子完全读出来，不会因为一些转义字符等（比如换行符），影响内容的存储，这在很多需要转义字符比如序列化、反序列化上有用处
+4. 还有就是在使用`cin`输入时，读取到空格就结束，使用`quoted`就可以读取空格和换行符(quoted的解析从`"` 开始，到`"`结束)
 
 ```cpp
 	std::string s("this is a text.");
@@ -321,5 +322,72 @@ void PrintTupleImpl(Tuple& t, std::index_sequence<I...>){
 	std::cout << "processed: " << std::quoted(str) << std::endl;
 	std::cout << "processed: " << std::quoted(Rstr) << std::endl;
 
+```
+
+### shared_timed_mutex
+
+1. 带超时机制的读写锁，分为独占和共享两种状态，支持超时系列接口如`try_lock_for` `try_lock_until` `try_lock_shared_until`等
+2. 独占是调用`lock` `try_lock`时，一般是在写入时；共享是在调用`lock_shared` `try_lock_shared`时，一般是在读的时侯。独占状态写，不释放锁无法进入共享，共享状态读，其他线程可以获取共享锁，但是无法写；总的来说就是为了处理多读少写的情况，不需要像`unique_lock`使用时读操作独占、写操作独占。
+3. `shared_mutex`是C++17引入的，使用是和`shared_timed_mutex`一样的，但是因为内部不需要维护超时机制所以更快一些，在多读少些的情况下，使用读写锁比互斥锁可以快很多
+
+4. 关于RAII对象，像互斥锁可以使用`unique_lock`，`shared_timed_mutex`可以使用`shared_lock`来进行自动管理的锁行为
+
+```cpp
+class ThreadSafeCounter {
+public:
+	int read() {
+		std::shared_lock<std::shared_timed_mutex>(_mtx);
+		return _cnt;
+	}
+
+	void write() {
+		std::unique_lock<std::shared_timed_mutex> lock(_mtx);
+		++_cnt;
+	}
+
+	int get_val() {
+		return _cnt;
+	}
+private:
+	std::shared_timed_mutex _mtx;  //这里使用shared_mutex + 读取时 shared_lock，速度最快
+	int _cnt = 0;
+};
+
+```
+
+以上面的代码为例，创建5个读线程、2个写线程，分别进行1000000次读操作、500000次写操作，如果使用`unique_lock`全部独占状态进行读写的话，大约需要3000+ms，但是使用`shared_lock`可以到100~200ms，而使用`shared_mutex`并对读操作采取共享状态可以达到0~50ms，优化效果还是相当明显的
+
+### 字面量后缀
+
+1. C++11就支持了一些字面量后缀
+
+```cpp
+auto a = 1.1f; //float
+auto b = 10000ll; //long long 
+```
+
+2. C++14支持了自定义字面量后缀，允许程序员为数字 、字符、字符串这些字面量定义后缀，来自动转化为特定的类型，但是用户自定义的为了和库中的区分，需要使用`_`来标识，否则有些编译器报错
+
+```cpp
+std::string operator""_s (const char* str, size_t len){
+    return std::string(str, len);
+}
+unsigned long long operator""_km(unsigned long long len){
+    return unsigned long long(len * 1000);
+}
+float operator""_e(const char* str){
+    return std::stof(str);
+}
+auto str = "hello world"_s;
+auto km = 12345_km;
+auto val = 1.11_e;
+auto str1 = "hello\0world"_s; //对于字符串的传参同时需要长度参数就是因为处理这类特殊字符
+```
+
+3. 库中最常用的大概就是时间的表示了，包含在`std::chrono_literals`中
+
+```cpp
+using std::chrono_literals;
+std::this_thread::sleep_for(1s);
 ```
 
