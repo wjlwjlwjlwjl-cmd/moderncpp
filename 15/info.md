@@ -62,3 +62,132 @@ if(auto it = find(v.begin(), v.end(), 1); it != v.end()){
 ```
 
 在`switch`语句中完全相似
+
+### 强制省略删除（返回值优化标准化）
+
+1. 首先指明一下两种分类：NRVO(Named Return Value Optimization) URVO(Unnamed Return Value Optimization)
+2. C++17强制规定，无名返回值必须优化，NRVO由编译器自己决定
+
+```cpp
+class Noisy {
+public:
+	Noisy() { std::cout << "construction..." << std::endl; }
+	Noisy(const Noisy& n) { std::cout << "copy construction..." << std::endl; }
+	Noisy(Noisy&& n) { std::cout << "move construction..." << std::endl; }
+	~Noisy() { std::cout << "deconstruction..." << std::endl; }
+};
+
+Noisy make_nrvo() {
+	//按理来说这里是有以下流程：构造、拷贝构造、拷贝构造(或者这两个拷贝构造使用移动构造)、构造。这里是NRVO，C++标准没有规定，但编译器通常会合三为一
+	//output: construction... deconstruction...
+	Noisy v = Noisy();
+	return v; 
+}
+
+Noisy make_urvo() {
+	//按理来说这里应该是构造、拷贝构造、拷贝构造，这里直接实现为一次构造
+    //output: construction... deconstruction...
+	return Noisy();
+}
+
+int main() {
+	auto ret = make_urvo();
+	return 0;
+}
+
+```
+
+3. 虽然市面上主流的编译器(gcc/g++ vs clang)都会进行自己的优化，但是这毕竟是编译器级别而不是语言级别的，所以仍然需要有相应的构造函数支持
+
+```cpp
+Noisy(const Noisy& n) = delete;
+Noisy(Noisy&& n) = delete;
+```
+
+这样处理之后，上面例子中的`make_nrvo`就会报错，虽然编译器会进行优化，但这并不是语言规定的，是可选的；而`make_urvo`不受影响，因为C++17标准强制规定这里直接省略为一次构造
+
+### if constexpr
+
+1. 前面其实已经提到过C++17支持的`if constexpr`，不同于`if`，其具有以下特点
+
+* 编译器判断
+* 条件是常量表达式
+* 不符合条件的部分删除
+
+```cpp
+//在模板元编程中的使用——解包
+template <class T, class...Arg>
+void PrintArgs(T elem, Arg&&...args){
+    if constexpr(sizeof...(args) > 0){
+        std::cout << elem << " ";
+        PrintArgs(args...);
+    }
+    else{
+        //在编译时就自动生成了递归解包的返回特化
+        std::cout << std::endl;
+    }
+}
+
+//类型分发
+template <class T>
+void typeHandle(T&& type){
+    if constexpr(std::is_same_v<T, int>){
+        std::cout << "T is int" << std::endl;
+    }
+    else if constexpr(std::is_same_v<T, std::string>){
+        std::cout << "T is string" << std::endl;
+    }
+    else{
+        std::cout << "Invalid type" << std::endl;
+    }
+}
+```
+
+### 折叠表达式
+
+1. C++17允许将一个二元操作符作用在参数包的所有参数上，分为一元左折叠、一元右折叠、带初始值二元左折叠、带初始值二元右折叠
+2. 主要用在模板编程，特别是可变参数模板
+
+```cpp
+template <class...Args> //一元左折叠
+void Print(Args...args) {
+	(std::cout << ... << args);
+}
+template <class...Args> //一元右折叠
+auto all(Args...args) {
+	return (args && ...);
+}
+template<class...String> //二元左折叠
+auto concatleft(String...str) {
+	return (std::string("###") + ... + str);
+}
+template<class...String> //二元右折叠
+auto concatright(String...str) {
+	return (str + ... + std::string("###"));
+}
+```
+
+如果操作符是逗号的话，因为逗号表达式严格从左向右执行的特点，所以左右折叠的选择不会有影响，但是对于其他来说，比如上面`string`的例子，就会使`###`分别出现在左右两侧
+
+3. 应用举例
+
+```cpp
+template<class...Args> //使用逗号运算符和lambda表达式来给打印添加空格
+void PrintWithSpace(Args...args) {
+	auto space = [=](int x) {std::cout << x << " ";};
+	(..., space(args));
+	std::cout << std::endl;
+}
+template<class V, class...Vals> //给数组尾插多个元素
+void Push_vals(V& v, Vals...vals) {
+	(..., v.push_back(vals));
+}
+```
+
+4. 传空参数包的情况
+
+* `&&`，true
+* `||`，false
+* `,`，void()
+* 带初始值的二元折叠，init
+
