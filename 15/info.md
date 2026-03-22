@@ -191,3 +191,226 @@ void Push_vals(V& v, Vals...vals) {
 * `,`，void()
 * 带初始值的二元折叠，init
 
+### 类模板参数的自动推导
+
+1. C++17之前需要手动指定模板类型，例如`vector<int> v`，但是C++17之后可以自动识别
+
+```cpp
+	std::vector v1{ 1 };
+	std::vector v2{ "hello", "world" };
+	std::vector v3(10, 1);
+	//std::vector v4; //报错，无法推导类型
+	std::pair p(1, "zhangsan");
+```
+
+### 非类型模板参数
+
+1. 非类型模板参数是指在`template`后面写的诸多参数中，类型已经指定了的(即没有`typename` `class`修饰)模板参数
+2. C++17之前，要求非类型模板参数的类型必须严格指定，但是C++17允许使用`auto`来自动识别非类型模板参数的类型，但是仅限于整形、枚举值、指针、左值引用、`nullptr_t`；后面到C++20，又支持了浮点数和字面量类类型（后面到C++20在详细说明，现在可以简单理解为在编译期就能完成构造、析构的简单的类，比如下面的Color和Point）
+
+```cpp
+template <auto Value>
+void PrintValue() {
+	std::cout << typeid(Value).name() << std::endl;
+}
+
+enum Color {
+	RED,
+	BLACK,
+};
+
+struct Point {
+	int x;
+	int y;
+};
+
+PrintValue<1>(); //整形
+PrintValue<RED>(); 
+PrintValue<nullptr>(); //nullptr_t
+PrintValue<'a'>(); //指针
+PrintValue<true>();
+
+PrintValue<1.1>();
+constexpr std::array<int, 2> arr(1, 2);
+PrintValue<arr>();
+constexpr Point pos(1, 2);
+PrintValue<pos>();
+```
+
+#### 嵌套命名空间
+
+1. C++17之前，定义嵌套命名空间的方式
+
+```cpp
+namespace a{
+    namespace b{
+        namespace c{
+            int x = 0;
+        }
+    }
+}
+```
+
+
+
+2. C++17的小语法糖
+
+```cpp
+namespace a::b::c{
+    int y = 0;
+}
+```
+
+3. 为了简化指定命名空间访问时的步骤，可以采取以下方式定义并访问
+
+```cpp
+namespace abc = a::b::c;
+std::cout << a::b::c::x << " " << abc::y << std::endl;
+```
+
+### __has_include
+
+1. 用来检查某个头文件是否存在并且可以被包含，既可以检查库的，也可以检查自己的头文件
+
+```cpp
+#if __has_include(<filesystem>)
+	#include <filesystem>
+#elif __has_include(<experimental/filesystem>)
+	#include <experimental/filesystem>
+#else
+	#error "<filesystem> needed"
+#endif
+
+#if __has_include("header.h")
+	#include "header.h"
+#endif
+```
+
+### 属性
+
+1. C++11引入了属性，在此之前主流编译器都有自己的实现方法，但是在C++11时只引入了两个属性
+
+* `[[noreturn]]`告知编译器不会有返回值，主要用于优化和错误检测
+* `[[carries_dependency]]`专家级别的并发优化，但对于99.9%的开发者，使用`atomic`的默认内存序以及其他高级并发工具已经足够
+
+```cpp
+//终止程序的函数
+[[noreturn]] void fatal_error(const std::string& message) {
+	std::cout << message << std::endl;
+	exit(EXIT_FAILURE);
+	return;
+}
+
+//用来抛异常的函数
+[[noreturn]] void throw_error() {
+	throw std::logic_error("...");
+}
+
+//执行死循环的函数
+[[noreturn]] void server_start() {
+	while (1) {
+
+	}
+}
+```
+
+* C++14引入了`[[depracated]]`，用来接口转换提示
+
+```cpp
+[[depracated("this func has been depracated, use new_func instead")]] int old_func(){
+    //...
+}
+```
+
+* C++17引入了`[[fallthrough]]` `[[nodiscard]]` `[[maybe_unused]]`
+
+```cpp
+void func(int op) {
+	switch (op) {
+	case 1:
+		//...
+		[[fallthrough]]; //告诉编译器此处不break是有意为之
+	case 2:
+		//...
+		break;
+	default:
+		//...
+		break;
+	};
+}
+
+[[nodiscard]] int func_1() {  //告知编译器此处返回值不应被丢弃，否则报警告。C++20后支持说明原因
+	return 1;
+}
+
+int func_2([[maybe_unused]]int val) {  //告知编译器这个变量可能不会被使用，不要报变量未使用的警告
+	return 1;
+}
+
+```
+
+* C++20引入了`[[likely]]` `[[unlikely]]` `[[no_unique_address]]`；`[[likely]]`和`[[unlikely]]`用来向编译器指示分支路径中具有极大概率偏差的两条路径，编译器可能会根据指示生成更高效的机器代码；`[[no_unique_address]]`，用来向编译器指示空对象不需要开辟空间（C++默认的是空对象为了标识存在也要开一个字节的空间，加上可能存在的）
+
+```cpp
+void options(int val) {
+	if (val == 1)[[likely]] {
+		//...
+	}
+	else if (val == 2) [[unlikely]] {
+		//...
+	}
+}
+
+class Empty {};
+
+class C {
+	int a = 0;
+	[[no_unique_address]] Empty e;
+};
+
+```
+
+### optional
+
+1. `std::optional<T>`表示其可能包含一个`T`类型的值，也可能没有；可以用来接受错误结果的同时，也能够传递正确结果
+2. 创建`optional`对象
+
+```cpp
+	std::optional<int> int_opt(1);
+	std::optional<std::string> str_opt("hello world");
+	std::optional<double> dou_opt(1.11);
+```
+
+3. 判断是否有值
+
+```cpp
+if (int_opt.has_value()) {
+	std::cout << int_opt.value() << std::endl;
+}
+if (str_opt) {
+	std::cout << str_opt.value() << std::endl;
+}
+```
+
+4. 访问对象
+
+```cpp
+	try {
+		int val_dou = dou_opt.value();
+	}
+	catch (const std::exception& e) {
+		std::cout << e.what() << std::endl;
+	}
+	int val_opt = int_opt.value_or(2);
+```
+
+`value_or`是如果内部有值的话，就返回内部的值，没有的话就返回给予的参数
+
+5. 修改对象
+
+```cpp
+	int_opt = 2;
+	str_opt = std::nullopt; //置空
+	dou_opt.reset(); //置空
+```
+
