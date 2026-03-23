@@ -616,3 +616,52 @@ private:
 
 ```
 
+### Any
+
+1. 可以用来存储任意的类型，比variant存储的更加灵活，而且在进行`any_cast`时会进行类型检查
+2. 同时，编译器也会进行SBO(Small Buffer Optimization)，Any本身就在栈上，同时也会在栈上申请一定的缓冲区，对于能够在栈上存下的类型（不止要考虑绝对大小，也要考虑内存对齐问题），就存储在这个缓冲区中；否则就存储在栈上（栈的操作效率比堆要快一两个数量级）
+3. Any会管理内部对象的生命周期，存储时会构造，当修改存储对象的时候会析构释放原来存储的对象
+
+#### 1. 构造和赋值
+
+```cpp
+	std::any a2 = 2.2;
+	std::any a3 = std::string("hello");  //自动识别类型
+	a3.emplace<std::string>("world");  //替换的时候需要指定类型
+	if (a3.has_value()) std::cout << "a3 has value" << std::endl;  //通过has_value去判断是否存储值
+	const std::type_info& t3 = a3.type();  //获取类型
+	std::cout << t1.name() << " " << t2.name() << " " << t3.name() << std::endl;
+```
+
+#### 2. any_cast
+
+* 转换为值，这种方式访问获取到的是any中值的拷贝
+
+```cpp
+std::any a1 = 1;
+int val = std::any_cast<int>(a1); //类型不匹配会抛异常
+```
+
+* 转换为引用，可以是左值，也可以是右值走移动构造
+
+```cpp
+std::any a1(std::string("hello")); std::any a2(std::string("world"));
+std::string& ra1 = std::any_cast<std::string&>(a1);
+std::string ra2 = std::any_cast<std::string&&>(std::move(a2));
+```
+
+* 转换为指针，传入的是any的指针；类型匹配，返回存储的值的指针，否则返回空指针
+
+```cpp
+std::any a = 1;
+if(auto ret = std::any_cast<int>(&a); ret != nullptr){
+    std::cout << *ret << std::endl;
+}
+```
+
+### 3. any 和 variant对比
+
+1. any和variant都可以在构造或之后赋值；any的访问使用`any_cast`，variant的访问使用`visit` `get` 等，前者相对简洁明了一些
+
+2. any的存储在栈中或者在堆中，variant的在栈中，后者相对更快一些
+3. variant在编译时已知所有可能类型，any要等到运行期；访问时any也需要进行类型查询和识别转换等，访问的效率也相对慢一些
