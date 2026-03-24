@@ -793,10 +793,8 @@ p1.remove_filename(); //删除末尾文件名
         fs::path file_path("test.txt");
         std::ofstream(file_path) << "hello world";
         auto status = fs::status(file_path).permissions();
-
         fs::permissions(file_path, fs::perms::owner_exec | fs::perms::group_exec, fs::perm_options::add);
         status = fs::status(file_path).permissions();
-
         fs::permissions(file_path, fs::perms::group_exec, fs::perm_options::remove);
         status = fs::status(file_path).permissions();
     }
