@@ -665,3 +665,143 @@ if(auto ret = std::any_cast<int>(&a); ret != nullptr){
 
 2. any的存储在栈中或者在堆中，variant的在栈中，后者相对更快一些
 3. variant在编译时已知所有可能类型，any要等到运行期；访问时any也需要进行类型查询和识别转换等，访问的效率也相对慢一些
+
+### string_view
+
+1. `string_view`是C++17引入的对已有的字符串或数组进行查看而不需要拷贝的类，简单理解就是`string_view`是观察一个目标的“望远镜”，不负责管理资源，只保存原始字符串的指针和长度，`const string_view`只能查看，不能修改
+2. `string_view`的构造和析构几乎是零开销的，而且几乎提供了所有`std::string`的读接口
+
+```cpp
+	std::string_view sv1 = "hello world"; //从C风格字符串构造
+
+	std::string str = "string_view-read-string";
+	std::string_view sv2(str); //从string构造
+
+	std::string_view sv3(str.c_str() + 6, 6); //从部分字符串构造（从string的第六个字符开始，取六个字符）
+
+	using namespace std::literals; //使用库提供的字面量后缀
+	std::string_view sv4 = "hello world"sv; //从字面量构造
+```
+
+#### string_view的陷阱
+
+1. 使用已经被释放的字符串的视图
+
+```cpp
+std::string_view get_view() {
+	std::string temp = "hello world";
+	return temp; //这里返回的string_view指向的是栈上的字符串
+}
+
+void error_example1() {
+	auto sv = get_view();
+	std::cout << sv << std::endl;
+}
+```
+
+2. `data()`返回的内容不一定包含`\0`，所以要注意保证内容是包含`\0`的
+
+```cpp
+	char filename[] = { 't', 'e', 's', 't', '.', 'c', 'p', 'p' }; //不以'\0'结尾的字符数组
+	std::string_view sv(filename);
+	std::cout << sv.data() << std::endl; //data()成员函数返回的不一定是以'\0'结尾的原始内容
+```
+
+解决方法，构造C风格字符串或者在构造`string_view`时指定长度并且访问时不使用`data()`
+
+2. 因为`string_view`中保存的是原始字符串的指针和长度，所以当原始字符串的内容发生改变时，可能会导致`string_view`失效
+
+```cpp
+	std::string s = "hello";
+	std::string_view sv(s);
+	s = "1111111111111111111111111111111111111111111111111111111111111111111111111111";
+	std::cout << sv << std::endl; //sv中保存着指针，但是原始的字符串已经改变了位置
+```
+
+### filesystem
+
+1. `std::filesystem`是C++17提供的跨平台的文件系统接口，对于mac、windows、linux等平台都可以忽略底层细节的使用
+2. 命名空间较长，可以通过别名访问 
+
+> namespace fs = std::filesystem
+
+#### 路径对象的构造
+
+```cpp
+fs::path p1 = R"(C:\Windows\System32)"; //对于Windows来说，因为路径分隔符是转义字符，所以要\\，就比较麻烦，可以通过这种方式自动识别反斜杠转义
+fs::path p2 = fs::current_path(); //获取当前路径
+```
+
+#### 路径信息获取
+
+```cpp
+p1.root_name(); //根目录名称
+p1.root_directory(); //根目录
+p1.root_path(); //根目录路径
+fs::current_path(); //当前目录名称
+
+p1.parent_path(); //父路径名称
+p1.relative_path(); //相对路径
+p1.stem(); //不带后缀名的文件名
+p1.filename(); //文件名
+p1.extension(); //后缀名
+```
+
+#### 路径修改
+
+```cpp
+p1 /= "GitFiles"; //通过'/='来对文件名末尾修改
+p1 /= "moderncpp";
+p1 /= "17";
+p1 /= "info.md";
+ 
+p1.replace_filename("test.cpp"); //添加末尾文件名
+p1.remove_filename(); //删除末尾文件名
+```
+
+其它部分的修改也是类似
+
+#### 路径的检查与转换
+
+```cpp
+	if (p1.is_absolute()) {
+		std::cout << "p1 is absolute" << std::endl;
+	}
+	else if(p1.is_relative()) {
+		std::cout << "p1 is relative" << std::endl;
+	}
+
+	if (p1.has_filename()) {
+		std::cout << "p1 has filename" << std::endl;
+	}
+	else if (p1.has_root_name()) {
+		std::cout << "p1 has root name" << std::endl;
+	}
+
+	auto s1 = p1.string(); //转换为平台依赖的string
+	auto s2 = p1.wstring(); //宽字符
+	auto s3 = p1.u8string(); //utf8
+```
+
+#### 权限操作
+
+1. 对于Unix类系统，这里的权限操作要可靠很多，因为和`filesystem`的操作逻辑一样，都是位运算，相比之下Windows的文件权限要复杂很多，虽然也支持但是不如Linux等下可靠
+2. 文件的权限在`std::filesystem::perms`中，大类是`owner` `group` `others`，其中又有`read` `write` `exec`三种具体权限；权限的获取通过`std::filesystem::status()`中的`permissions()`获取；操作通过`std::filesystem::permissions`，主要有`replace` `add` `remove`三种操作
+
+```cpp
+    try{
+        fs::path file_path("test.txt");
+        std::ofstream(file_path) << "hello world";
+        auto status = fs::status(file_path).permissions();
+
+        fs::permissions(file_path, fs::perms::owner_exec | fs::perms::group_exec, fs::perm_options::add);
+        status = fs::status(file_path).permissions();
+
+        fs::permissions(file_path, fs::perms::group_exec, fs::perm_options::remove);
+        status = fs::status(file_path).permissions();
+    }
+    catch(const std::exception& e){
+        std::cout << e.what() << std::endl;
+    }
+```
+
