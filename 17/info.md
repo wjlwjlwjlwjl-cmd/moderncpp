@@ -803,3 +803,37 @@ p1.remove_filename(); //删除末尾文件名
     }
 ```
 
+#### 目录操作
+
+1. 创建目录分为两种，一种是直接创建单一目录，另一种是递归创建多个不存在的目录，不能混用，否则抛异常
+
+```cpp
+namespace fs = std::filesystem;
+fs::path p1 = "/home/wang/dir1";	fs::path p2 = "/home/wang/dir2/dir_in_dir2";
+fs::create_directory(p1); fs::create_directories(p2);
+```
+
+2. 拷贝文件，先是from，再是to，如果原来已经有同名文件，需要指定覆盖老文件
+
+```cpp
+namespace fs = std::filesystem;
+fs::path p1 = "/home/wang/dir1/test.cc"; fs::path p2 = "/home/wang/dir2";
+fs::copy_file(p1, p2, fs::copy_options::overwrite_existing);
+```
+
+3. 拷贝目录，如果是空目录的话，直接from、to即可，但是如果已有内容就需要指定递归拷贝
+
+```cpp
+namespace fs = std::filesystem;
+fs::path p1 = "/home/wang/dir1"; fs::path p2 = "home/wang/dir_cp";
+fs::copy_file(p1, p2, fs::copy_options::overwrite_existing | fs::copy_options::recursive);
+```
+
+4. 删除目录或文件，根据是否需要递归删除选择函数
+
+```cpp
+namespace fs = std::filesystem;
+fs::path p1 = "home/wang/dir1"; fs::path p2 = "home/wang/dir2";
+fs::remove(p1); fs::remove_all(p2);
+```
+
