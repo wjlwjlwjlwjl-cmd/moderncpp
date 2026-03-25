@@ -836,3 +836,55 @@ namespace fs = std::filesystem;
 fs::path p1 = "home/wang/dir1"; fs::path p2 = "home/wang/dir2";
 fs::remove(p1); fs::remove_all(p2);
 ```
+
+#### 目录遍历
+
+1. 使用范围for遍历，可以使用`std::filesystem::recursive_directory_iterator`作为递归目录迭代器；`std::filesystem::directory_iterator`作为普通迭代器，只显示当前目录中的文件和目录；对于没有权限访问的目录和文件，需要指定`std::filesystem::directory_options::skip_permissions_denied`，否则抛异常
+
+```cpp
+    auto file_it = fs::recursive_directory_iterator(p1);
+    for(auto& e: file_it){
+        //...
+    }
+
+    auto it = fs::recursive_directory_iterator(p1, option);
+    auto end = fs::recursive_directory_iterator();
+    while(it != end){
+        fs::directory_entry de = *it;
+        //...
+        it++;
+    }
+
+```
+
+#### 错误处理
+
+可以通过try-catch语句处理异常`std::filesystem::filesystem_error`，也可以在调用`filesystem`是给一个`std::error_code`作为输出型参数带出错误，也就不需要考虑异常问题了
+
+```cpp
+    try{
+        std::cout << p << std::endl;
+    }
+    catch(const fs::filesystem_error& fe){
+        std::cout << fe.what() << fe.path1() << fe.path2() << std::endl;
+    }
+
+    std::error_code ec;
+    std::cout << fs::file_size(p, ec);
+    if(ec){
+        std::cout << ec.value() << std::endl;
+        std::cout << ec.message() << std::endl;
+        std::cout << ec.category().name() << std::endl;
+    }
+    return 0;
+
+```
+
+### 并行算法
+
+1. C++17之后为几乎各种常见算法都提供了并行的选项，比如sort，默认就是串行执行，可以通过指定`std::execution::par`来串行执行
+
+```cpp
+std::sort(std::execution::par, d2.begin(), d2.end());
+```
+
