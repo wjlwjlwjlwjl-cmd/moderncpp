@@ -145,3 +145,32 @@ void func(Arg...args) {
 }
 ```
 
+### 2.4.4 约束的偏序规则
+
+在一个模板有被多个约束修饰的重载时，编译器会从所有重载中选择一个约束最严的调用。比如A约束被C约束包含，这就意味着满足了C就一定满足了A，但是反过来不一定。所以会优先调用C约束的重载
+
+```cpp
+template <class T>
+concept A = std::is_copy_constructible_v<T>;
+
+template <class T>
+concept B = std::is_move_constructible_v<T>;
+
+template <class T>
+concept C = B<T> && A<T>;
+
+template <A T>
+void func(T t) {
+	std::cout << "A->func" << std::endl;
+}
+template <C T>
+void func(T t) {
+	std::cout << "C->func" << std::endl;
+}
+```
+
+比如在上面的例子中，调用 func(1.1) A、C两个约束都成立，但是会打印 C->func，因为C更严格。
+
+# 2. 协程
+
+![coroutine](C:\GitFiles\moderncpp\20\coroutine.PNG)
