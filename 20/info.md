@@ -185,21 +185,25 @@ void func(T t) {
 
 C++的协程是无栈协程，这意味着一个流程中，当去继续执行被挂起的函数时，就要从当前函数中暂停运行。在这个无栈协程的“栈”中，只需要保存局部状态（如恢复点）。
 
+![coroutine](C:\GitFiles\moderncpp\20\coroutine.PNG)
+
+**一个协程生成器的开始、执行、销毁、异常处理逻辑示意**
+
 ## 2.2 Promise
 
 Promise是协程的心脏，决定了协程的操作句柄、异常处理、返回情况、变量存储，以及在开始、终止、生成数值是的挂起情况。
 
 ### 2.2.1 get_return_object
 
-C++20的协程操作句柄 `coroutine_handle`，是通过 `Promise` 初始化的，一个 `Promise` 类型，需要在内部实现例子中的各种方法供给编译器自己去调用，而 `get_return_object`，产生的就是调用协程函数第一步返回的操作句柄
+C++20的协程操作句柄 `coroutine_handle`，是通过 `Promise` 初始化的，一个 `Promise` 类型，需要在内部实现例子中的各种方法供给编译器自己去调用，而 `get_return_object`，产生的就是自定义的包装Promise给外界使用接口的类型（如上面例子中的Generator）
 
 ### 2.2.2 initial_suspend、final_suspend
 
 决定协程函数在开始调用（执行第一个语句前）和结束（ `return_void` 或者 `return_value` ）之后是否需要挂起。如果挂起的话，只有外界通过对应的协程操作句柄 `resume` ，才能够继续往下执行。注意 `final_suspend` 需要实现为 `noexcept`
 
-### 2.2.3 yeild_value
+### 2.2.3 yield_value
 
-在协程函数调用 `co_yeild`时，用来完成对 `Promise` 内数据的操作逻辑。同样 `yeild_value` 可以决定后续是否挂起
+在协程函数调用 `co_yield`时，用来完成对 `Promise` 内数据的操作逻辑。同样 `yield_value` 可以决定后续是否挂起
 
 ### 2.2.4 return_void、return_value
 
@@ -262,6 +266,10 @@ struct promise_type {
 
 销毁协程帧，不过对于 `final_suspend` 选择 `std::suspend_never` 的来说，不需要手动实现，并且二次销毁还是未定义行为
 
+### 2.2.7 operator coroutine_handle<>()
+
+该转换函数将值转换为具有相同底层 `address` 地址的协程句柄，可以在 `suspend_await`中作为形参接受各协程的句柄
+
 ```c++
 struct Generator {
 	struct promise_type {
@@ -287,6 +295,104 @@ struct Generator {
 };
 ```
 
+## 2.3 Awaitable对象
 
+1. 在C++20中，任何出现在 `co_await` 左侧的对象都是 `Awaitble` 对象。它决定了以下三种情况
 
-![coroutine](C:\GitFiles\moderncpp\20\coroutine.PNG)
+* 是否需要暂停当前协程
+* 在暂停之前，需要完成那些处理逻辑
+* 在恢复之后，如何获取异步操作的结果
+
+2. 为了完成以上三种情况，必须在自己实现的 `Awaitable`  对象中完成 `await_ready` `await_suspend` `await_resume`
+
+### 2.3.1 bool await_ready() const
+
+决定请求挂起后，条件是否就绪，是否真的需要挂起。如果真的需要挂起，返回false，否则true
+
+### 2.3.2 type await_suspend(std::coroutine_handle<>) const
+
+在调用完了 `await_ready` ，确定要挂起后，实际挂起之前，会调用 `await_suspend`，完成挂起之前的操作：获取某个协程的句柄，将它交给另一个异步操作在事件就绪之后再将被挂起的协程恢复
+
+**返回值决定了 `await_suspend` 之后的操作**
+
+* 返回 void，则控制权转移到协程的调用者，协程暂停。这也是最常见的情况
+* 返回 true，代表已经挂起到后台，后面也可能在另一个线程中恢复；返回 false，代表在挂起前的最后等待事件就绪，协程不再挂起，继续往下执行
+* 返回 `coroutine_handle<>` 代表返回另一个协程句柄，不像前面两种方式一样需要一个“调度器”角色的第三方来判断是否需要往下执行，控制权不再返回到调用者，而是通过返回的协程句柄到相应协程继续执行。这就是协程的对称转移，是实现无栈链式协程调用的关键
+
+### 2.3.3 type await_resume() const
+
+在协程挂起恢复后或者 `await_ready` 返回 true 后，会调用 `await_resume`，来产生 `co_await` 的返回值，在不抛出异常时，建议和前面个两个一样，实现为 `noexcept`
+
+### 2.3.4 operator co_await()
+
+使得我们自定义的类型，成为能够被 co_await 调用的 Awaitable 对象
+
+>**std::suspend_always** **std::suspend_never**，是库中为我们提供的两个 Awaitable 对象，第一个表示立即挂起，第二个表示不挂起继续往下执行协程
+>
+>两者常用于 `initial_suspend` `final_suspend` `yield_value` 等的返回值来确定是否需要挂起
+
+# 3. 模块
+
+>在有模块以前，C++对于所有包含的头文件，在编译时都会进行展开并全部重新进行编译，哪怕只有一个文件的一个函数做出了微小的更改。虽然也可以通过对于类只传指针来降低类修改后整体编译的时间，但是整体上依然很慢。
+
+C++20引入了模块，允许模块中的内容实现 **编译一次，多次调用** 的效果。同时，相比C++一直使用的头文件机制，模块有以下优点：
+
+1. 缩短编译时间。对于多个文件同时使用的模块，不需要像以前一样每个文件编译时都编译自己的一遍
+2. 隔离性。除非是导出的内容，模块中的所有实现都不可见
+3. 无宏泄露。模块中定义的宏不会延伸到导入模块的文件中
+4. 更清晰的语义，明确区分接口和实现。一般建议在 `.ixx` 文件中书写声明（模板除外），在 `.cpp` 中书写定义，但是就像头文件中可以直接实现函数体，在 `.ixx` 中也是可以写定义的
+
+> 模板除外的原因是：在调用模板的单元中，因为没有定义（模板的声明在头文件），所以在编译这个单元时无法实例化，会等到链接时在试图寻找；但是当编译定义该模板的单元时，返现并没有调用它，所以不会为它生成代码。
+>
+> 这样到最后也没有找到该模板的实例化代码，所以链接报错
+
+## 3.1 模块的基本语法规则
+
+### 3.1.1 模块的声明、导出、与导入
+
+在 `.ixx` 文件中，使用 `export module ModelName` 的方式声明接下来模块的实现。
+
+在需要导出的内容之前，加上 `export` 关键字，来导出相应内容，如：
+
+```cpp
+export module Func;
+export void func(){};  	  //导出函数
+export{			 	  	 //同时导出多个函数
+    void func1(){};
+    void func2(){};
+}
+export namespace A{	   	  //导出命名空间
+    void funcA(){};
+}
+export template<class T>  //导出模板
+T add(T x, T y){return x + y;}
+export class B{			 //导出结构体
+public:
+    void funcB(){};
+};
+```
+
+只有模块中使用 `export` 导出的内容，在 `import` 的文件中才是可见的，其他的函数、变量、包含的头文件（在全局模块片段中），都是不可见的，只在模块内部可访问
+
+在模块的实现文件中，通过 `export ModelName` 来表示自己实现的是哪一个模块的内容
+
+在需要使用模块的文件中，使用 `import ModelName` 来导入模块
+
+### 3.1.2 全局模块片段
+
+如果需要在模块中使用其他头文件中的内容，而这些文件又没有模块化，就需要使用**全局模块片段**了。（如果直接包含的话，会报警告）
+
+全局模块片段使用 `module` 关键字开启，到模块的声明结束，例如
+
+```cpp
+module;
+#include <iostream>
+#define BUFFER_SIZE 1024;
+
+export module Func;
+void func(){
+	std::cout << BUFFER_SIZE << std::endl;
+}
+```
+
+全局模块片段中只能使用预编译指令。如果使用非预编译指令会直接编译报错
