@@ -119,3 +119,151 @@ for (auto e: v) {
 }
 std::cout << std::endl;
 ```
+## 2.3 vformat
+这里的 v，是 view，视图的意思。使用上和 format 完全一样，但是第一个参数需要传入一个视图，后两个参数也需要特殊的 format_args（通过 make_format_args构造）。
+vformat 并不会直接在传入视图上作出格式化更改（也不能），而是会直接构建一个新的字符串返回，减少了在格式化原有字符串时字符串移动等的开销
+
+**使用样例1：日志器**
+```cpp
+class log {
+public:
+    enum class Level{
+        error,
+        debug
+    };
+
+    template <class...Args>
+    void debug(Level level, std::string_view sv, Args&&...args) {
+        auto format_args = std::make_format_args(args...);
+        auto buff = std::vformat(sv, format_args);
+        outputMessage(Level::debug, buff);
+    }
+
+    template <class...Args>
+    void error(Level level, std::string_view sv ,Args&&...args) {
+        auto format_args = std::make_format_args(args...);
+        auto buf = std::vformat(sv, format_args);
+        outputMessage(Level::error, buf);
+    }
+private:
+    void outputMessage(Level level, const std::string& buffer) {
+        if (level == Level::debug) {
+            std::cout << "Debug: " << buffer << std::endl;
+        }
+        else {
+            std::cout << "Error: " << buffer << std::endl;
+        }
+    }
+};
+```
+
+**使用样例2：延迟格式化**
+```cpp
+class delayFormat {
+public:
+    template <class...Args>
+    void addFormat(std::string_view sv, Args&&...args) {
+        auto newFormat = [=]() {
+            return std::vformat(sv, std::make_format_args(args...));
+        };
+        _formatters.emplace_back(newFormat);
+    }
+
+    void executeAll() {
+        for (auto format: _formatters) {
+            auto ret = format();
+            std::cout << ret << std::endl;
+        }
+    }
+private:
+    std::vector<std::function<std::string()>> _formatters;
+};
+```
+## 2.4 formatter
+formatter 允许自定义实现 format，需要实现两个部分：parse 和 format
+* `parse`，在编译时调用，解析格式化参数
+* `format`，在运行时调用，进行格式化处理
+
+**formatter，偏特化的语法格式**
+```cpp
+template<>
+struct formatter<typename>{
+	constexpr auto parse(std::format_parse_context& cxt){
+		//...
+		return cxt.begin();
+	}
+	
+	auto format(const typename& type, std::format_context& cxt){
+		//...
+		return std::format_to(cxt.out(), "format{}", type.member);
+	}
+}
+```
+比如下面对 Person 类的 formatter 特化
+```cpp
+struct Person {
+    const std::string name;
+    const int age;
+    const std::string gender;
+};
+
+template<>
+class std::formatter<Person> {
+public:
+    char option = 's';
+    constexpr auto parse(std::format_parse_context& cxt) {
+        auto it = cxt.begin();
+        char ch = *it;
+        switch (ch) {
+            case 's':
+            case 'l':
+            case 'j':
+                option = ch;
+                it++;
+                break;
+            default:
+                throw std::format_error("expected one of j, l, s");
+                break;
+        }
+        if (it != cxt.end() && *it != '}') {
+            throw std::format_error("expected one argument or should ended with }");
+        }
+        return it;
+    }
+
+    auto format(const Person& p, std::format_context& cxt) const {
+        if (option == 'j') {
+            return std::format_to(cxt.out(), R"({{"name":"{}","age":{},"gender":"{}"}})", p.name, p.age, p.gender); //注意，R"()"，只能够正常在字符串中使用引号，但是花括号不受影响，只能通过{{}}转义花括号
+        }
+        else if (option == 'l') {
+            return std::format_to(cxt.out(), "name: {}, age: {}, gender: {}", p.name, p.age, p.gender);
+        }
+        else if (option == 's') {
+            return std::format_to(cxt.out(), "name: {}", p.name);
+        }
+        else {
+            throw std::format_error("Unknown format option");
+        }
+    }
+};
+```
+
+在 C++23 中，可以实现对 STL 容器的格式化输出。同时支持 `range_formatter` 对范围容器的格式化，可以极大简化对符合范围的容器的格式化。
+使用 range_formatter 的 parse、format、set_separator、set_brackets，就可以方便的自定义范围容器的格式化
+```cpp
+template<class T>
+struct std::formatter<std::vector<T>> {
+public:
+    std::range_formatter<T, char> rf;
+    constexpr auto parse(std::format_parse_context& ctx) {
+        auto it = rf.parse(ctx);
+        rf.set_separator("----");
+        rf.set_brackets("|", "|"); //注意这里要传字符串，字符无法转化为 basic_string_view
+        return it;
+    }
+
+    auto format(const std::vector<T>& v, std::format_context& ctx)const  {
+        return rf.format(v, ctx);
+    }
+};
+```

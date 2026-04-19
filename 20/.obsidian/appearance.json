@@ -1,4 +1,8 @@
 {
-  "baseFontSize": 24,
-  "cssTheme": "Atom"
+  "baseFontSize": 30,
+  "cssTheme": "Atom",
+  "interfaceFontFamily": "Cascadia Code",
+  "textFontFamily": "Cascadia Code",
+  "monospaceFontFamily": "Cascadia Code",
+  "baseFontSizeAction": true
 }
