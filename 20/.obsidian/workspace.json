@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "info.md",
+                "file": "other.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "info"
+              "title": "other"
             }
           }
         ]
@@ -74,7 +74,8 @@
               "title": "书签"
             }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "horizontal",
@@ -186,6 +187,7 @@
   },
   "active": "9fb9ed8566db88f3",
   "lastOpenFiles": [
+    "info.md",
     "other.md"
   ]
 }
