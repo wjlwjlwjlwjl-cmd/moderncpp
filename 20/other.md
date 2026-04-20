@@ -267,7 +267,8 @@ public:
     }
 };
 ```
-## jthread
+## 3 jthread
+
 使用C++原生线程库中的线程，需要手动的 join 或者 detach，否则程序崩溃；或者中间有一场抛出没有往下执行到资源的回收，同样会导致崩溃
 C++20引入了 jthread，意思是 joined thread，会在析构的时候自动完成线程的销毁。内部有两个关键成员：一个是 thread 线程对象本身，另一个是 stop_source，作用类似与一个 flag，外界可以告诉 thread 线程是否应该停止
 这里运用了观察者模式，是否停止的状态通过 stop_token 传递，只有其他线程可以通过 request_stop 修改 stop_source 的状态（当 jthread 对象析构时，如果线程还未退出，也会自己调用 request_stop）
@@ -338,5 +339,63 @@ void testStopCallBack() {
     std::this_thread::sleep_for(2s);
     jt.request_stop();
 }
-
 ```
+## 4 syncstream
+
+在多线程程序的日志打印中，如果直接使用标准输出打印的话，会导致输出内容杂乱无章难以查看。一种方式是通过加锁解决，另一种方式是通过 C++20 提供的 syncstream
+syncstream 是在内部提供了一小块缓冲区，输出内容都会到这个缓冲区中，当 syncstream 对象析构的时候，会原子性的输出缓冲区内容，达到有序输出的目的
+也可以调用 emit 手动输出。需要注意的是，不要过长时间的持有 syucstream，这样就失去了短生命周期原子性带出日志的意义
+syncstream 是 basic_osyncstream\<char\>的别名
+```cpp
+void testSyncStream() {
+    auto task = [=](int i) {
+        std::osyncstream out(std::cout);
+        out << i << " this is a message before emit...\n";
+        out << i << " this is a message before emit...\n";
+        out << i << " this is a message before emit...\n";
+        out.emit();
+        out << i << " this is a message after emit\n";
+    };
+    std::vector<std::jthread> workers;
+    for (int i = 0; i < 10; i++) {
+        workers.emplace_back(task, i);
+    }
+}
+```
+
+## 5 指派初始化器
+
+C++17 中的聚合类可以通过如下方式初始化
+```cpp
+struct Person{
+	std::string name;
+	std::string address;
+	int id;
+};
+struct Person p1{"zhangsan", "linyi", 1};
+```
+这种方式有两点不方便：
+1. 不能跳过成员使用默认值
+2. 容易搞混哪个参数对应那个参数
+
+所以 C++20 引入了指派初始化器，可以成员-参数对应的方式进行初始化，允许跳过成员，但是不可以改变声明的顺序初始化
+```cpp
+struct Person p1{
+        .name = "zhangsan",
+        .age = 19,
+        .gender = "male",
+        .address = "linyi"
+    };
+    struct Person p2{
+        .name = "lisi",
+        .gender = "female"
+    };
+```
+
+> **关于聚合类**
+> 聚合类要求满足以下要求
+> 1. 没有用户实现的构造函数（可以写为 =default 或者 =delete 的形式）
+> 2. 没有虚函数
+> 3. 没有私有或者保护成员
+> 4. 不在继承体系中
+> （C++17之前写类成员默认初始化器会丧失聚合属性，但是 C++17 允许使用）
