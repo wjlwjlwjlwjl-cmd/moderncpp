@@ -267,3 +267,76 @@ public:
     }
 };
 ```
+## jthread
+使用C++原生线程库中的线程，需要手动的 join 或者 detach，否则程序崩溃；或者中间有一场抛出没有往下执行到资源的回收，同样会导致崩溃
+C++20引入了 jthread，意思是 joined thread，会在析构的时候自动完成线程的销毁。内部有两个关键成员：一个是 thread 线程对象本身，另一个是 stop_source，作用类似与一个 flag，外界可以告诉 thread 线程是否应该停止
+这里运用了观察者模式，是否停止的状态通过 stop_token 传递，只有其他线程可以通过 request_stop 修改 stop_source 的状态（当 jthread 对象析构时，如果线程还未退出，也会自己调用 request_stop）
+```cpp
+void InterruptableWorker(std::stop_token token) {
+    for (int i = 0; i < 10; i++) {
+        if (token.stop_requested()) {
+            return;
+        }
+        std::cout << "InterruptaleWorker running..." << i << std::endl;
+        std::this_thread::sleep_for(100ms);
+    }
+}
+
+void testStopToken() {
+    std::jthread jt(InterruptableWorker);
+    std::this_thread::sleep_for(1100ms);
+    jt.request_stop();
+}
+```
+
+**stop_source**
+一般来说不需要自己直接去使用 stop_source，但是如果需要同时控制多个线程是否停止的话，就可以把这个 stop_source 传给多个线程。一个 stop_source 可以产生多个 stop_token。
+```cpp
+void testStopSource() {
+    std::stop_source source;
+    std::jthread worker1([token = source.get_token()]() {
+        while (!token.stop_requested()) {
+            std::cout << "worker1 running..." << std::endl;
+            std::this_thread::sleep_for(500ms);
+        }
+        std::cout << "worker1 exit" << std::endl;
+    });
+    std::jthread worker2([token = source.get_token()]() {
+        while (!token.stop_requested()) {
+            std::cout << "worker2 running..." << std::endl;
+            std::this_thread::sleep_for(300ms);
+        }
+        std::cout << "worker2 exit" << std::endl;
+    });
+    std::this_thread::sleep_for(2s);
+    source.request_stop();
+}
+```
+
+**stop_callback**
+jthread 退出后的回调处理函数，可以在这里完成清理工作
+```cpp
+void testStopCallBack() {
+    std::jthread jt([=](std::stop_token token) {
+        std::ofstream log("test.txt");
+        std::vector<std::string> tmps;
+        std::stop_callback sc(token, [&]() {
+            log << "jthread exit abnormally\n";
+            std::cout << "start cleanup in callback" << std::endl;
+            log.close();
+            tmps.clear();
+            std::cout << "cleanup finished" << std::endl;
+            return;
+        });
+        while (!token.stop_requested()) {
+            tmps.push_back("working...");
+            log << "working normally\n";
+            std::this_thread::sleep_for(500ms);
+        }
+        return;
+    });
+    std::this_thread::sleep_for(2s);
+    jt.request_stop();
+}
+
+```
